@@ -1,7 +1,7 @@
-from django.contrib import admin
-
 # Register your models here.
 from django.contrib import admin
+from .forms import ProjectAdminForm
+from projects.services.project_service import create_project
 
 from .models import (
     Project,
@@ -39,6 +39,7 @@ class ProjectAdmin(admin.ModelAdmin):
     """
     Admin configuration for Project.
     """
+    form = ProjectAdminForm
 
     list_display = (
         "code",
@@ -166,7 +167,18 @@ class ProjectAdmin(admin.ModelAdmin):
         },
     ),
 )
-    
+    def save_model(self, request, obj, form, change):
+        if change:
+            super().save_model(request, obj, form, change)
+            return
+
+        project = create_project(**form.cleaned_data)
+
+        obj.pk = project.pk
+        obj.code = project.code
+        obj.slug = project.slug
+        obj.created_at = project.created_at
+        obj.updated_at = project.updated_at
 
 @admin.register(ProjectMember)
 class ProjectMemberAdmin(admin.ModelAdmin):
