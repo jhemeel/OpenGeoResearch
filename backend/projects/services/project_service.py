@@ -8,10 +8,20 @@ from projects.services.project_code_service import generate_project_code
 
 @transaction.atomic
 def create_project(**validated_data):
+    """
+    Create a project and its initial project memberships.
+
+    The project owner is automatically added as an OWNER.
+    The principal investigator is automatically added as a
+    PRINCIPAL_INVESTIGATOR when different from the owner.
+    """
+
+    name = validated_data["name"].strip()
+
     project = Project(
         **validated_data,
         code=generate_project_code(),
-        slug=slugify(validated_data["name"].strip()),
+        slug=slugify(name),
     )
 
     project.full_clean()
@@ -34,5 +44,3 @@ def create_project(**validated_data):
         )
 
     return project
-
-
