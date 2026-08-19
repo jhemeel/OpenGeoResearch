@@ -1,0 +1,8 @@
+| Action         | Requirement        |
+| -------------- | ------------------ |
+| List projects  | Authenticated user |
+| View project   | Authenticated user |
+| Create project | Authenticated user |
+| Update project | Project owner      |
+| Delete project | Project owner      |
+| Partial update | Project owner      |

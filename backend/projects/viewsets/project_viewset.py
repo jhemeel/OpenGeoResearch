@@ -1,8 +1,10 @@
 from rest_framework import status, viewsets
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from projects.serializers import ProjectSerializer
 from projects.services.project_service import create_project
+from projects.permissions import IsProjectOwner
 
 # Normally DRF's ModelViewSet would effectively do request, serializer and Project.objects.create
 # But we are overiding the create() method
@@ -15,6 +17,10 @@ class ProjectViewSet(viewsets.ModelViewSet):
     """
 
     serializer_class = ProjectSerializer
+    permission_classes = (
+        IsAuthenticated,
+        IsProjectOwner,
+)
 
     def get_queryset(self):
         return (
@@ -46,3 +52,5 @@ class ProjectViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED,
             headers=headers,
         )
+    
+    
