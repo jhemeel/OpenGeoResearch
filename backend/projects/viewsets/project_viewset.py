@@ -2,6 +2,9 @@ from rest_framework import status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter, OrderingFilter
+
 from projects.serializers import ProjectSerializer
 from projects.services.project_service import create_project
 from projects.permissions import IsProjectOwner
@@ -17,10 +20,44 @@ class ProjectViewSet(viewsets.ModelViewSet):
     """
 
     serializer_class = ProjectSerializer
+
     permission_classes = (
         IsAuthenticated,
         IsProjectOwner,
-)
+    )
+    
+    filter_backends = (
+        DjangoFilterBackend,
+        SearchFilter,
+        OrderingFilter,
+    )
+
+    filterset_fields = (
+        "status",
+        "visibility",
+        "organization",
+        "is_active",
+    )
+
+    search_fields = (
+        "name",
+        "code",
+        "description",
+    )
+
+    ordering_fields = (
+        "name",
+        "code",
+        "created_at",
+        "start_date",
+        "end_date",
+        "status",
+    )
+
+    ordering = (
+        "-created_at",
+    )
+
 
     def get_queryset(self):
         return (
