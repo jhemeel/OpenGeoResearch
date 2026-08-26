@@ -26,7 +26,7 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
 
-        return (
+        queryset = (
             ProjectMember.objects
             .select_related(
                 "project",
@@ -36,6 +36,15 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
                 project__owner=user,
             )
         )
+
+        project_id = self.request.query_params.get("project")
+
+        if project_id:
+            queryset = queryset.filter(
+                project_id=project_id
+            )
+
+        return queryset
     
 
     

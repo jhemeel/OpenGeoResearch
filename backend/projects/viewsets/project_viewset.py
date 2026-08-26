@@ -78,7 +78,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        project = create_project(**serializer.validated_data)
+        project = create_project( owner=request.user, **serializer.validated_data)
 
         response_serializer = self.get_serializer(project)
 
