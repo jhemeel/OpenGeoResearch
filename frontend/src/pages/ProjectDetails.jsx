@@ -1,72 +1,100 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import {getProject, deleteProject,} from "../services/projectService";
-import { getProjectMembers, createProjectMember, updateProjectMember,} from "../services/projectMemberService";
+import { Link, useNavigate, useParams } from "react-router-dom";
+
+import {
+  getProject,
+  deleteProject,
+} from "../services/projectService";
+
+import {
+  getProjectMembers,
+  createProjectMember,
+  updateProjectMember,
+  deleteProjectMember,
+} from "../services/projectMemberService";
+
 import { getUsers } from "../services/userService";
 
+import Button from "../components/ui/Button";
+import Card from "../components/ui/Card";
+import PageHeader from "../components/ui/PageHeader";
+import Select from "../components/ui/Select";
+import StatusBadge from "../components/ui/StatusBadge";
 
 function ProjectDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
 
   const [project, setProject] = useState(null);
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const [members, setMembers] = useState([]);
   const [membersLoading, setMembersLoading] = useState(true);
   const [membersError, setMembersError] = useState("");
+
   const [editingMemberId, setEditingMemberId] = useState(null);
   const [editingMemberRole, setEditingMemberRole] = useState("");
   const [updatingMember, setUpdatingMember] = useState(false);
 
   const [users, setUsers] = useState([]);
-
-  const [showAddMember, setShowAddMember] =  useState(false);
+  const [showAddMember, setShowAddMember] = useState(false);
 
   const [memberForm, setMemberForm] = useState({
     user: "",
     role: "RESEARCHER",
   });
 
-  const [addingMember, setAddingMember] =
-    useState(false);
+  const [addingMember, setAddingMember] = useState(false);
+  const [memberFormError, setMemberFormError] = useState("");
 
-  const [memberFormError, setMemberFormError] =
-    useState("");
+  const roleOptions = [
+    { value: "OWNER", label: "Owner" },
+    {
+      value: "PRINCIPAL_INVESTIGATOR",
+      label: "Principal Investigator",
+    },
+    {
+      value: "PROJECT_MANAGER",
+      label: "Project Manager",
+    },
+    {
+      value: "DATA_MANAGER",
+      label: "Data Manager",
+    },
+    { value: "RESEARCHER", label: "Researcher" },
+    { value: "ENUMERATOR", label: "Enumerator" },
+    { value: "ANALYST", label: "Data Analyst" },
+    { value: "VIEWER", label: "Viewer" },
+  ];
 
   useEffect(() => {
     const loadProject = async () => {
       try {
-        const [
-          projectData,
-          memberData,
-          userData,
-        ] = await Promise.all([
-          getProject(id),
-          getProjectMembers(id),
-          getUsers(),
-        ]);
+        setLoading(true);
+        setError("");
+
+        const [projectData, membersData, usersData] =
+          await Promise.all([
+            getProject(id),
+            getProjectMembers(id),
+            getUsers(),
+          ]);
 
         setProject(projectData);
 
         setMembers(
-          memberData.results || memberData
+          membersData.results || membersData
         );
 
         setUsers(
-          userData.results || userData
+          usersData.results || usersData
         );
       } catch (error) {
         console.error(error);
 
         setError(
-          "Unable to load project."
-        );
-
-        setMembersError(
-          "Unable to load project members."
+          "Unable to load the project. Please try again."
         );
       } finally {
         setLoading(false);
@@ -78,13 +106,10 @@ function ProjectDetails() {
   }, [id]);
 
   const handleMemberChange = (event) => {
-    const {
-      name,
-      value,
-    } = event.target;
+    const { name, value } = event.target;
 
-    setMemberForm((previous) => ({
-      ...previous,
+    setMemberForm((current) => ({
+      ...current,
       [name]: value,
     }));
   };
@@ -92,23 +117,24 @@ function ProjectDetails() {
   const handleAddMember = async (event) => {
     event.preventDefault();
 
-    setAddingMember(true);
-    setMemberFormError("");
+    if (!memberForm.user) {
+      setMemberFormError("Please select a user.");
+      return;
+    }
 
     try {
-      await createProjectMember({
-        project: id,
+      setAddingMember(true);
+      setMemberFormError("");
+
+      const newMember = await createProjectMember(id, {
         user: memberForm.user,
         role: memberForm.role,
       });
 
-      const updatedMembers =
-        await getProjectMembers(id);
-
-      setMembers(
-        updatedMembers.results ||
-          updatedMembers
-      );
+      setMembers((current) => [
+        ...current,
+        newMember,
+      ]);
 
       setMemberForm({
         user: "",
@@ -119,17 +145,10 @@ function ProjectDetails() {
     } catch (error) {
       console.error(error);
 
-      if (error.response?.data) {
-        setMemberFormError(
-          JSON.stringify(
-            error.response.data
-          )
-        );
-      } else {
-        setMemberFormError(
+      setMemberFormError(
+        error?.response?.data?.detail ||
           "Unable to add project member."
-        );
-      }
+      );
     } finally {
       setAddingMember(false);
     }
@@ -138,26 +157,26 @@ function ProjectDetails() {
   const handleEditMember = (member) => {
     setEditingMemberId(member.id);
     setEditingMemberRole(member.role);
-};
+  };
 
   const handleUpdateMember = async (memberId) => {
-    setUpdatingMember(true);
-    setMembersError("");
-
     try {
-      await updateProjectMember(
+      setUpdatingMember(true);
+
+      const updatedMember = await updateProjectMember(
+        id,
         memberId,
         {
           role: editingMemberRole,
         }
       );
 
-      const updatedMembers =
-        await getProjectMembers(id);
-
-      setMembers(
-        updatedMembers.results ||
-          updatedMembers
+      setMembers((current) =>
+        current.map((member) =>
+          member.id === memberId
+            ? updatedMember
+            : member
+        )
       );
 
       setEditingMemberId(null);
@@ -165,31 +184,74 @@ function ProjectDetails() {
     } catch (error) {
       console.error(error);
 
-      if (error.response?.data) {
-        setMembersError(
-          JSON.stringify(
-            error.response.data
-          )
-        );
-      } else {
-        setMembersError(
-          "Unable to update project member."
-        );
-      }
+      setMembersError(
+        "Unable to update project member."
+      );
     } finally {
       setUpdatingMember(false);
     }
-};
+  };
 
   const handleCancelEditMember = () => {
     setEditingMemberId(null);
     setEditingMemberRole("");
-};
+  };
 
+  const handleToggleMemberStatus = async (member) => {
+    try {
+      const updatedMember = await updateProjectMember(
+        id,
+        member.id,
+        {
+          is_active: !member.is_active,
+        }
+      );
+
+      setMembers((current) =>
+        current.map((item) =>
+          item.id === member.id
+            ? updatedMember
+            : item
+        )
+      );
+    } catch (error) {
+      console.error(error);
+
+      setMembersError(
+        "Unable to update member status."
+      );
+    }
+  };
+
+  const handleRemoveMember = async (memberId) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to remove this member from the project?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await deleteProjectMember(id, memberId);
+
+      setMembers((current) =>
+        current.filter(
+          (member) => member.id !== memberId
+        )
+      );
+    } catch (error) {
+      console.error(error);
+
+      setMembersError(
+        "Unable to remove project member."
+      );
+    }
+  };
 
   const handleDelete = async () => {
     const confirmed = window.confirm(
-      `Are you sure you want to delete "${project.name}"?`
+      "Are you sure you want to delete this project? This action cannot be undone."
     );
 
     if (!confirmed) {
@@ -198,481 +260,590 @@ function ProjectDetails() {
 
     try {
       await deleteProject(id);
-
       navigate("/projects");
     } catch (error) {
       console.error(error);
 
       setError(
-        "Unable to delete project."
+        "Unable to delete the project. Please try again."
       );
     }
   };
 
   if (loading) {
-    return <p>Loading project...</p>;
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Project Details"
+          description="Loading project information..."
+        />
+
+        <Card>
+          <div className="space-y-4">
+            <div className="h-7 w-2/3 animate-pulse rounded bg-ogr-slate-200" />
+            <div className="h-4 w-1/2 animate-pulse rounded bg-ogr-slate-200" />
+            <div className="h-24 animate-pulse rounded bg-ogr-slate-200" />
+          </div>
+        </Card>
+      </div>
+    );
   }
 
-  if (error && !project) {
+  if (error) {
     return (
-      <div>
-        <p>{error}</p>
-
-        <button
-          type="button"
-          onClick={() =>
-            navigate("/projects")
+      <div className="space-y-6">
+        <PageHeader
+          title="Project Details"
+          description="Research project information"
+          backLink={
+            <Link
+              to="/projects"
+              className="text-sm font-medium text-ogr-primary-600 hover:text-ogr-primary-700"
+            >
+              ← Back to Projects
+            </Link>
           }
-        >
-          Back to Projects
-        </button>
+        />
+
+        <Card title="Unable to load project">
+          <p className="text-sm text-ogr-danger">
+            {error}
+          </p>
+        </Card>
       </div>
     );
   }
 
   if (!project) {
-    return <p>Project not found.</p>;
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Project Details"
+          description="Research project information"
+          backLink={
+            <Link
+              to="/projects"
+              className="text-sm font-medium text-ogr-primary-600 hover:text-ogr-primary-700"
+            >
+              ← Back to Projects
+            </Link>
+          }
+        />
+
+        <Card>
+          <div className="py-8 text-center">
+            <p className="font-medium text-ogr-slate-800">
+              Project not found.
+            </p>
+
+            <div className="mt-4">
+              <Button
+                variant="secondary"
+                onClick={() => navigate("/projects")}
+              >
+                Back to Projects
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
   }
 
   return (
-    <div>
-      <button
-        type="button"
-        onClick={() =>
-          navigate("/projects")
+    <div className="space-y-8">
+      <PageHeader
+        title={project.name}
+        description="Research project details and project team management."
+        backLink={
+          <Link
+            to="/projects"
+            className="text-sm font-medium text-ogr-primary-600 hover:text-ogr-primary-700"
+          >
+            ← Back to Projects
+          </Link>
         }
-      >
-        ← Back to Projects
-      </button>
+        actions={
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              variant="secondary"
+              onClick={() =>
+                navigate(`/projects/${project.id}/edit`)
+              }
+            >
+              Edit Project
+            </Button>
 
-      <h2>{project.name}</h2>
+            <Button
+              variant="danger"
+              onClick={handleDelete}
+            >
+              Delete Project
+            </Button>
+          </div>
+        }
+      />
 
-      {error && (
-        <div>
-          <strong>Error:</strong>
-          <p>{error}</p>
+      {/* Project Summary */}
+      <Card>
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="inline-flex rounded-ogr-md bg-ogr-primary-50 px-3 py-1 text-sm font-semibold text-ogr-primary-700">
+                {project.code}
+              </span>
+
+              <StatusBadge status={project.status} />
+
+              <StatusBadge
+                status={
+                  project.visibility === "PUBLIC"
+                    ? "PUBLIC"
+                    : "PRIVATE"
+                }
+              />
+            </div>
+
+            <h2 className="mt-4 text-2xl font-bold text-ogr-slate-900">
+              {project.name}
+            </h2>
+
+            {project.slug && (
+              <p className="mt-1 text-sm text-ogr-slate-500">
+                {project.slug}
+              </p>
+            )}
+          </div>
+
+          <div className="shrink-0">
+            <StatusBadge
+              status={
+                project.is_active
+                  ? "ACTIVE"
+                  : "INACTIVE"
+              }
+            />
+          </div>
         </div>
-      )}
+      </Card>
 
-      <hr />
-
-      <section>
-        <h3>Project Overview</h3>
-
-        <p>
-          <strong>Code:</strong>{" "}
-          {project.code}
-        </p>
-
-        <p>
-          <strong>Organization:</strong>{" "}
-          {project.organization_name ||
-            project.organization}
-        </p>
-
-        <p>
-          <strong>Owner:</strong>{" "}
-          {project.owner_name ||
-            project.owner}
-        </p>
-
-        <p>
-          <strong>
-            Principal Investigator:
-          </strong>{" "}
-          {project.principal_investigator_name ||
-            project.principal_investigator ||
-            "Not specified"}
-        </p>
-
-        <p>
-          <strong>Description:</strong>{" "}
-          {project.description ||
-            "No description provided."}
-        </p>
-
-        <p>
-          <strong>Objectives:</strong>{" "}
-          {project.objectives ||
-            "No objectives provided."}
-        </p>
-
-        <p>
-          <strong>Keywords:</strong>{" "}
-          {project.keywords ||
-            "No keywords provided."}
-        </p>
-
-        <p>
-          <strong>Funding Agency:</strong>{" "}
-          {project.funding_agency ||
-            "Not specified"}
-        </p>
-
-        <p>
-          <strong>Grant Number:</strong>{" "}
-          {project.grant_number ||
-            "Not specified"}
-        </p>
-
-        <p>
-          <strong>Budget:</strong>{" "}
-          {project.budget ??
-            "Not specified"}
-        </p>
-
-        <p>
-          <strong>
-            Ethics Approval Number:
-          </strong>{" "}
-          {project.ethics_approval_number ||
-            "Not specified"}
-        </p>
-
-        <p>
-          <strong>Start Date:</strong>{" "}
-          {project.start_date ||
-            "Not specified"}
-        </p>
-
-        <p>
-          <strong>End Date:</strong>{" "}
-          {project.end_date ||
-            "Not specified"}
-        </p>
-
-        <p>
-          <strong>Status:</strong>{" "}
-          {project.status}
-        </p>
-
-        <p>
-          <strong>Visibility:</strong>{" "}
-          {project.visibility}
-        </p>
-
-        <p>
-          <strong>Active:</strong>{" "}
-          {project.is_active
-            ? "Yes"
-            : "No"}
-        </p>
-      </section>
-
-      <hr />
-
-      <section>
-        <h3>Project Members</h3>
-
-        <button
-          type="button"
-          onClick={() => {
-            setShowAddMember(
-              (previous) => !previous
-            );
-
-            setMemberFormError("");
-          }}
+      {/* Overview + Information */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card
+          title="Project Overview"
+          description="Description and objectives of the research project."
+          className="lg:col-span-2"
         >
-          {showAddMember
-            ? "Cancel"
-            : "+ Add Member"}
-        </button>
+          <div className="space-y-6">
+            <div>
+              <h4 className="text-sm font-semibold text-ogr-slate-900">
+                Description
+              </h4>
 
-        {showAddMember && (
-          <form
-            onSubmit={handleAddMember}
-            style={{
-              marginTop: "16px",
-              marginBottom: "24px",
+              <p className="mt-2 whitespace-pre-line text-sm leading-6 text-ogr-slate-600">
+                {project.description ||
+                  "No description provided."}
+              </p>
+            </div>
+
+            <div>
+              <h4 className="text-sm font-semibold text-ogr-slate-900">
+                Objectives
+              </h4>
+
+              <p className="mt-2 whitespace-pre-line text-sm leading-6 text-ogr-slate-600">
+                {project.objectives ||
+                  "No objectives provided."}
+              </p>
+            </div>
+
+            <div>
+              <h4 className="text-sm font-semibold text-ogr-slate-900">
+                Keywords
+              </h4>
+
+              <p className="mt-2 text-sm text-ogr-slate-600">
+                {project.keywords ||
+                  "No keywords provided."}
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        <Card
+          title="Project Information"
+          description="Key project details."
+        >
+          <dl className="space-y-5">
+            <div>
+              <dt className="text-xs font-medium uppercase tracking-wide text-ogr-slate-500">
+                Organization
+              </dt>
+
+              <dd className="mt-1 text-sm font-medium text-ogr-slate-900">
+                {project.organization_name ||
+                  project.organization ||
+                  "Not specified"}
+              </dd>
+            </div>
+
+            <div>
+              <dt className="text-xs font-medium uppercase tracking-wide text-ogr-slate-500">
+                Owner
+              </dt>
+
+              <dd className="mt-1 text-sm font-medium text-ogr-slate-900">
+                {project.owner_name ||
+                  project.owner ||
+                  "Not specified"}
+              </dd>
+            </div>
+
+            <div>
+              <dt className="text-xs font-medium uppercase tracking-wide text-ogr-slate-500">
+                Principal Investigator
+              </dt>
+
+              <dd className="mt-1 text-sm font-medium text-ogr-slate-900">
+                {project.principal_investigator_name ||
+                  project.principal_investigator ||
+                  "Not specified"}
+              </dd>
+            </div>
+
+            <div>
+              <dt className="text-xs font-medium uppercase tracking-wide text-ogr-slate-500">
+                Start Date
+              </dt>
+
+              <dd className="mt-1 text-sm text-ogr-slate-700">
+                {project.start_date ||
+                  "Not specified"}
+              </dd>
+            </div>
+
+            <div>
+              <dt className="text-xs font-medium uppercase tracking-wide text-ogr-slate-500">
+                End Date
+              </dt>
+
+              <dd className="mt-1 text-sm text-ogr-slate-700">
+                {project.end_date ||
+                  "Not specified"}
+              </dd>
+            </div>
+
+            <div>
+              <dt className="text-xs font-medium uppercase tracking-wide text-ogr-slate-500">
+                Active
+              </dt>
+
+              <dd className="mt-1">
+                <StatusBadge
+                  status={
+                    project.is_active
+                      ? "ACTIVE"
+                      : "INACTIVE"
+                  }
+                />
+              </dd>
+            </div>
+          </dl>
+        </Card>
+      </div>
+
+      {/* Funding & Compliance */}
+      <Card
+        title="Funding & Compliance"
+        description="Financial and research governance information."
+      >
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-ogr-slate-500">
+              Funding Agency
+            </p>
+
+            <p className="mt-1 text-sm font-medium text-ogr-slate-900">
+              {project.funding_agency ||
+                "Not specified"}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-ogr-slate-500">
+              Grant Number
+            </p>
+
+            <p className="mt-1 text-sm font-medium text-ogr-slate-900">
+              {project.grant_number ||
+                "Not specified"}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-ogr-slate-500">
+              Budget
+            </p>
+
+            <p className="mt-1 text-sm font-medium text-ogr-slate-900">
+              {project.budget !== null &&
+              project.budget !== undefined
+                ? project.budget
+                : "Not specified"}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-ogr-slate-500">
+              Ethics Approval
+            </p>
+
+            <p className="mt-1 text-sm font-medium text-ogr-slate-900">
+              {project.ethics_approval_number ||
+                "Not specified"}
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      {/* Project Members */}
+      <Card
+        title="Project Members"
+        description="Manage researchers and collaborators assigned to this project."
+        actions={
+          <Button
+            variant="primary"
+            onClick={() => {
+              setShowAddMember((current) => !current);
+              setMemberFormError("");
             }}
           >
-            <div>
-              <label htmlFor="member-user">
-                User
-              </label>
+            {showAddMember
+              ? "Cancel"
+              : "Add Member"}
+          </Button>
+        }
+      >
+        {/* Add Member Form */}
+        {showAddMember && (
+          <div className="mb-6 rounded-ogr-md border border-ogr-slate-200 bg-ogr-slate-50 p-5">
+            <h4 className="text-sm font-semibold text-ogr-slate-900">
+              Add Project Member
+            </h4>
 
-              <br />
-
-              <select
-                id="member-user"
-                name="user"
-                value={memberForm.user}
-                onChange={handleMemberChange}
-                required
-              >
-                <option value="">
-                  Select user
-                </option>
-
-                {users.map((user) => (
-                  <option
-                    key={user.id}
-                    value={user.id}
-                  >
-                    {user.name ||
-                      user.email}{" "}
-                    ({user.email})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <br />
-
-            <div>
-              <label htmlFor="member-role">
-                Role
-              </label>
-
-              <br />
-
-              <select
-                id="member-role"
-                name="role"
-                value={memberForm.role}
-                onChange={handleMemberChange}
-                required
-              >
-                <option value="OWNER">
-                  Owner
-                </option>
-
-                <option value="PRINCIPAL_INVESTIGATOR">
-                  Principal Investigator
-                </option>
-
-                <option value="PROJECT_MANAGER">
-                  Project Manager
-                </option>
-
-                <option value="DATA_MANAGER">
-                  Data Manager
-                </option>
-
-                <option value="RESEARCHER">
-                  Researcher
-                </option>
-
-                <option value="ENUMERATOR">
-                  Enumerator
-                </option>
-
-                <option value="ANALYST">
-                  Analyst
-                </option>
-
-                <option value="VIEWER">
-                  Viewer
-                </option>
-              </select>
-            </div>
-
-            <br />
-
-            {memberFormError && (
-              <div>
-                <strong>Error:</strong>
-
-                <pre>
-                  {memberFormError}
-                </pre>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={addingMember}
+            <form
+              onSubmit={handleAddMember}
+              className="mt-4 space-y-4"
             >
-              {addingMember
-                ? "Adding..."
-                : "Add Member"}
-            </button>
-          </form>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Select
+                  label="User"
+                  name="user"
+                  value={memberForm.user}
+                  onChange={handleMemberChange}
+                  options={[
+                    {
+                      value: "",
+                      label: "Select user",
+                    },
+                    ...users.map((user) => ({
+                      value: user.id,
+                      label:
+                        user.display_name ||
+                        user.full_name ||
+                        user.email,
+                    })),
+                  ]}
+                />
+
+                <Select
+                  label="Role"
+                  name="role"
+                  value={memberForm.role}
+                  onChange={handleMemberChange}
+                  options={roleOptions}
+                />
+              </div>
+
+              {memberFormError && (
+                <p className="text-sm text-ogr-danger">
+                  {memberFormError}
+                </p>
+              )}
+
+              <div className="flex justify-end">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={addingMember}
+                >
+                  {addingMember
+                    ? "Adding..."
+                    : "Add Member"}
+                </Button>
+              </div>
+            </form>
+          </div>
         )}
 
-        <div style={{ marginTop: "20px" }}>
-          {membersLoading && (
-            <p>Loading members...</p>
-          )}
+        {membersError && (
+          <div className="mb-5 rounded-ogr-md border border-red-200 bg-red-50 p-4">
+            <p className="text-sm text-ogr-danger">
+              {membersError}
+            </p>
+          </div>
+        )}
 
-          {membersError && (
-            <p>{membersError}</p>
-          )}
+        {/* Members List */}
+        {membersLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((item) => (
+              <div
+                key={item}
+                className="h-16 animate-pulse rounded-ogr-md bg-ogr-slate-100"
+              />
+            ))}
+          </div>
+        ) : members.length === 0 ? (
+          <div className="py-10 text-center">
+            <p className="font-medium text-ogr-slate-800">
+              No project members found.
+            </p>
 
-          {!membersLoading &&
-            !membersError &&
-            members.length === 0 && (
-              <p>
-                No members found.
-              </p>
-            )}
+            <p className="mt-1 text-sm text-ogr-slate-500">
+              Add researchers and collaborators to
+              this project.
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-ogr-slate-100">
+            {members.map((member) => (
+              <div
+                key={member.id}
+                className="flex flex-col gap-4 py-5 md:flex-row md:items-center md:justify-between"
+              >
+                <div className="flex min-w-0 items-center gap-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ogr-primary-100 text-sm font-semibold text-ogr-primary-700">
+                    {(
+                      member.user_name ||
+                      member.user_email ||
+                      "U"
+                    )
+                      .charAt(0)
+                      .toUpperCase()}
+                  </div>
 
-          {!membersLoading &&
-            members.length > 0 && (
-              <div>
-                {members.map((member) => (
-            <div
-              key={member.id}
-              style={{
-                marginBottom: "16px",
-                paddingBottom: "12px",
-                borderBottom:
-                  "1px solid #ddd",
-              }}
-            >
-              <p>
-                <strong>
-                  {member.user_name ||
-                    "Unnamed user"}
-                </strong>
-              </p>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-ogr-slate-900">
+                      {member.user_name ||
+                        "Unnamed user"}
+                    </p>
 
-              <p>
-                {member.user_email}
-              </p>
-
-              {editingMemberId === member.id ? (
-                <div>
-                  <label
-                    htmlFor={`role-${member.id}`}
-                  >
-                    Role
-                  </label>
-
-                  <br />
-
-                  <select
-                    id={`role-${member.id}`}
-                    value={editingMemberRole}
-                    onChange={(event) =>
-                      setEditingMemberRole(
-                        event.target.value
-                      )
-                    }
-                  >
-                    <option value="OWNER">
-                      Owner
-                    </option>
-
-                    <option value="PRINCIPAL_INVESTIGATOR">
-                      Principal Investigator
-                    </option>
-
-                    <option value="PROJECT_MANAGER">
-                      Project Manager
-                    </option>
-
-                    <option value="DATA_MANAGER">
-                      Data Manager
-                    </option>
-
-                    <option value="RESEARCHER">
-                      Researcher
-                    </option>
-
-                    <option value="ENUMERATOR">
-                      Enumerator
-                    </option>
-
-                    <option value="ANALYST">
-                      Analyst
-                    </option>
-
-                    <option value="VIEWER">
-                      Viewer
-                    </option>
-                  </select>
-
-                  <br />
-                  <br />
-
-                  <button
-                    type="button"
-                    disabled={updatingMember}
-                    onClick={() =>
-                      handleUpdateMember(
-                        member.id
-                      )
-                    }
-                  >
-                    {updatingMember
-                      ? "Saving..."
-                      : "Save"}
-                  </button>
-
-                  {" "}
-
-                  <button
-                    type="button"
-                    disabled={updatingMember}
-                    onClick={
-                      handleCancelEditMember
-                    }
-                  >
-                    Cancel
-                  </button>
+                    {member.user_email && (
+                      <p className="truncate text-xs text-ogr-slate-500">
+                        {member.user_email}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              ) : (
-                <>
-                  <p>
-                    <strong>
-                      Role:
-                    </strong>{" "}
-                    {member.role}
-                  </p>
 
-                  <p>
-                    <strong>
-                      Status:
-                    </strong>{" "}
-                    {member.is_active
-                      ? "Active"
-                      : "Inactive"}
-                  </p>
+                <div className="flex flex-wrap items-center gap-3">
+                  {editingMemberId === member.id ? (
+                    <>
+                      <Select
+                        value={editingMemberRole}
+                        onChange={(event) =>
+                          setEditingMemberRole(
+                            event.target.value
+                          )
+                        }
+                        options={roleOptions}
+                      />
 
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleEditMember(
-                        member
-                      )
-                    }
-                  >
-                    Edit Role
-                  </button>
-                </>
-              )}
-            </div>
-              ))}
+                      <Button
+                        variant="primary"
+                        onClick={() =>
+                          handleUpdateMember(
+                            member.id
+                          )
+                        }
+                        disabled={updatingMember}
+                      >
+                        {updatingMember
+                          ? "Saving..."
+                          : "Save"}
+                      </Button>
+
+                      <Button
+                        variant="secondary"
+                        onClick={
+                          handleCancelEditMember
+                        }
+                        disabled={updatingMember}
+                      >
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="inline-flex rounded-ogr-md bg-ogr-slate-100 px-3 py-1 text-xs font-medium text-ogr-slate-700">
+                        {member.role}
+                      </span>
+
+                      <StatusBadge
+                        status={
+                          member.is_active
+                            ? "ACTIVE"
+                            : "INACTIVE"
+                        }
+                      />
+
+                      {member.user !== project.owner && (
+                        <>
+                          <Button
+                            variant="secondary"
+                            onClick={() =>
+                              handleEditMember(
+                                member
+                              )
+                            }
+                          >
+                            Edit
+                          </Button>
+
+                          <Button
+                            variant="secondary"
+                            onClick={() =>
+                              handleToggleMemberStatus(
+                                member
+                              )
+                            }
+                          >
+                            {member.is_active
+                              ? "Deactivate"
+                              : "Activate"}
+                          </Button>
+
+                          <Button
+                            variant="danger"
+                            onClick={() =>
+                              handleRemoveMember(
+                                member.id
+                              )
+                            }
+                          >
+                            Remove
+                          </Button>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
-            )}
-        </div>
-      </section>
-
-      <hr />
-
-      <section>
-        <button
-          type="button"
-          onClick={() =>
-            navigate(
-              `/projects/${id}/edit`
-            )
-          }
-        >
-          Edit Project
-        </button>
-
-        {" "}
-
-        <button
-          type="button"
-          onClick={handleDelete}
-        >
-          Delete Project
-        </button>
-      </section>
+            ))}
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

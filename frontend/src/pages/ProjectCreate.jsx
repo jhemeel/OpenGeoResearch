@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams  } from "react-router-dom";
 
 import { createProject } from "../services/projectService";
 import api from "../services/api";
 
 function ProjectCreate() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const organizationId = searchParams.get("organization");
 
   const [organizations, setOrganizations] = useState([]);
   const [researchers, setResearchers] = useState([]);
@@ -17,7 +19,7 @@ function ProjectCreate() {
 
   const [formData, setFormData] = useState({
     name: "",
-    organization: "",
+    organization: organizationId || "",
     principal_investigator: "",
     description: "",
     objectives: "",

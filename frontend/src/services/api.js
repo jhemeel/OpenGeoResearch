@@ -10,14 +10,15 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const accessToken = localStorage.getItem("access");
-
     if (accessToken) {
       config.headers.Authorization = `Bearer ${accessToken}`;
     }
-
+    if (config.data instanceof FormData) {
+      delete config.headers["Content-Type"];
+    }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 );
 
 api.interceptors.response.use(
@@ -26,10 +27,7 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    if (
-      error.response?.status === 401 &&
-      !originalRequest._retry
-    ) {
+    if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
       const refreshToken = localStorage.getItem("refresh");
@@ -44,18 +42,14 @@ api.interceptors.response.use(
           `${import.meta.env.VITE_API_BASE_URL}auth/refresh/`,
           {
             refresh: refreshToken,
-          }
+          },
         );
 
         const newAccessToken = response.data.access;
 
-        localStorage.setItem(
-          "access",
-          newAccessToken
-        );
+        localStorage.setItem("access", newAccessToken);
 
-        originalRequest.headers.Authorization =
-          `Bearer ${newAccessToken}`;
+        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
 
         return api(originalRequest);
       } catch (refreshError) {
@@ -66,7 +60,7 @@ api.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 export default api;
