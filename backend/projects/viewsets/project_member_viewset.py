@@ -73,3 +73,109 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED,
             headers=headers,
     )
+
+    # Project Member Owner Protection
+
+
+    def partial_update(self, request, *args, **kwargs):
+        membership = self.get_object()
+
+        # The project owner cannot be deactivated.
+        if (
+            membership.user_id == membership.project.owner_id
+            and request.data.get("is_active") is False
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "The project owner cannot be deactivated."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # The project owner's role cannot be changed.
+        if (
+            membership.user_id == membership.project.owner_id
+            and "role" in request.data
+            and request.data["role"] != membership.role
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "The project owner's role cannot be changed."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return super().partial_update(
+            request,
+            *args,
+            **kwargs,
+    )
+
+
+    def update(self, request, *args, **kwargs):
+        membership = self.get_object()
+
+        # The project owner cannot have their role changed.
+        if (
+            membership.user_id == membership.project.owner_id
+            and "role" in request.data
+            and request.data["role"] != membership.role
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "The project owner's role cannot be changed."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # The project owner cannot be deactivated.
+        if (
+            membership.user_id == membership.project.owner_id
+            and request.data.get("is_active") is False
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "The project owner cannot be deactivated."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return super().update(
+            request,
+            *args,
+            **kwargs,
+    )
+
+
+
+    def destroy(self, request, *args, **kwargs):
+        membership = self.get_object()
+
+        # The project owner cannot be removed from their own project.
+        if (
+            membership.user_id == membership.project.owner_id
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "The project owner cannot be removed "
+                        "from the project."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return super().destroy(
+            request,
+            *args,
+            **kwargs,
+        )
+

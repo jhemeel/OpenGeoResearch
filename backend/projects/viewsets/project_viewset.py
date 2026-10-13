@@ -9,6 +9,9 @@ from projects.serializers import ProjectSerializer
 from projects.services.project_service import create_project
 from projects.permissions import IsProjectOwner
 
+from projects.models import Project
+
+
 # Normally DRF's ModelViewSet would effectively do request, serializer and Project.objects.create
 # But we are overiding the create() method
 # So we're deliberately routing creation through our service: request, serializer validation, create_project(),
@@ -70,9 +73,8 @@ class ProjectViewSet(viewsets.ModelViewSet):
         )
 
     def get_project_queryset(self):
-        from projects.models import Project
 
-        return Project.objects.all()
+       return Project.objects.filter(is_active=True)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)

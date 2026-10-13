@@ -7,7 +7,7 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     organization_name = serializers.CharField( source="organization.name", read_only=True,)
 
-    owner_name = serializers.CharField( source="owner.email", read_only=True, )
+    owner_name = serializers.CharField( source="owner.full_name", read_only=True, )
 
     principal_investigator_name = serializers.CharField( source="principal_investigator.full_name", read_only=True,)
 
